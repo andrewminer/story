@@ -18,16 +18,19 @@ class GameLog
 class Inventory
 
     constructor: ->
-        @items = []
+        @items = {}
+        @length = 0
 
     add: (item)->
-        @items.push(item)
+        if not @items[item.name]
+            @items[item.name] = item
+            @length += 1
 
     describe: ->
         result = []
 
         needsDelimiter = false
-        for item in @items
+        for name, item of @items
             if needsDelimiter
                 result.push("\n")
             result.push("There is a #{item.name} here.")
@@ -36,11 +39,16 @@ class Inventory
         return result.join("\n")
 
     eachItem: (withItem=(->))->
-        for item in @items
+        for name, item of @items
             withItem(item)
 
-    isEmpty: ->
-        return @items.length is 0
+    has: (item)->
+        return !! @items[item.name]
+
+    remove: (itemToRemove)->
+        if @items[itemToRemove.name]
+            delete @items[itemToRemove.name]
+            @length -= 1
 
 
 ########################################################################################################################
@@ -79,7 +87,7 @@ class Location
             result.push("\n")
             result.push(@description)
 
-        if not @inventory.isEmpty()
+        if @inventory.length > 0
             result.push("")
             result.push(@inventory.describe())
 
@@ -152,10 +160,6 @@ class Parser
     _normalizeSentence: (sentence)->
         if sentence.has(verb: 0, location: 1)
             sentence.addWord(new WordToken("go", "verb"))
-        else if sentence.has(verb: 1, item: 0) and (sentence.verb is "take")
-            sentence.addWord(new WordToken("all", "item"))
-        else if sentence.has(verb: 1, item: 0) and (sentence.verb is "drop")
-            sentence.addWord(new WordToken("all", "item"))
 
         return sentence
 
@@ -172,6 +176,7 @@ class Parser
         candidates = {}
 
         considerItem = (item)->
+            console.log("considering: #{item}")
             if item.name.indexOf(rawWord) isnt -1
                 candidate = candidates[item.name] ?= {item: item; count: 0}
                 candidate.count += 1
@@ -271,6 +276,18 @@ class Player
             throw new ParseError(transition.lockDescription)
 
         @story.arrive(location)
+
+    take: (item)->
+        localItems = @story.currentLocation.inventory
+        if not item
+            localItems.eachItem (item)=> @take(item)
+        else if localItems.has(item)
+            localItems.remove(item)
+            @inventory.add(item)
+            @story.log.writeln("Taken.")
+        else
+            throw new ParseError("You can't take #{item} because there isn't one here.")
+
 
 
 ########################################################################################################################
@@ -391,6 +408,12 @@ class Story
                 player.move(sentence.location)
             else
                 throw new ParseError("I'm not sure where you want to go...")
+
+        @player.addVerb "take", (sentence)->
+            if sentence.has(item: 1)
+                player.take(sentence.item)
+            else if sentence.has(item: 0)
+                player.take()
 
 
 ########################################################################################################################
