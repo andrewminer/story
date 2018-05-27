@@ -30,15 +30,11 @@ class Inventory
         options.simple ?= false
         result = []
 
-        needsDelimiter = false
         for name, item of @items
-            if needsDelimiter
-                result.push("\n")
             if options.simple
                 result.push(item.name)
             else
                 result.push("There is a #{item.name} here.")
-            needsDelimiter = true
 
         return result.join("\n")
 
@@ -62,6 +58,9 @@ class Item
     constructor: (@name)->
         @description = "non-descript item"
 
+    describe: ->
+        return @description
+
     toString: ->
         return @name
 
@@ -84,10 +83,11 @@ class Location
         @inventory.add(item)
         return this
 
-    describe: ->
+    describe: (options={})->
+        options.verbose ?= false
         result = [@name]
 
-        if not @visited
+        if (not @visited) or options.verbose
             result.push("\n")
             result.push(@description)
 
@@ -192,7 +192,7 @@ class Parser
 
         highestCount = 0
         mostPopular = []
-        for candidate in candidates.values()
+        for candidate in candidates
             if candidate.count is highestCount
                 mostPopular.push(candidate)
             else if candidate.count > highestCount
@@ -204,7 +204,7 @@ class Parser
                 "I'm not sure what you meant by #{rawWord}... which did you mean: #{mostPopular.join(", ")}"
             )
 
-        sentence.addWord(new WordToken(rawWord, "item", mostPopular[0]))
+        sentence.addWord(new WordToken(rawWord, "item", mostPopular[0].item))
         return true
 
     _useAsVerb: (rawWord, sentence)->
@@ -389,13 +389,22 @@ class Story
         @parser.addDirections(
             "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"
         )
-        @parser.addFillerWords("of", "the", "a", "an", "to")
+        @parser.addFillerWords(
+            "a",
+            "an",
+            "around",
+            "at",
+            "of",
+            "the",
+            "to"
+        )
         @parser.addAliases({
             "d": "down",
             "e": "east",
             "everything": "all",
             "g": "go"
             "i": "inventory"
+            "l": "look",
             "n": "north",
             "ne": "northeast",
             "nw": "northwest",
@@ -418,6 +427,12 @@ class Story
             else
                 @log.writeln("You have:")
                 @log.writeln(@player.inventory.describe(simple: true))
+
+        @player.addVerb "look", (sentence)=>
+            if sentence.has(item: 1)
+                @log.writeln(sentence.item.describe(verbose: true))
+            else
+                @log.writeln(@currentLocation.describe(verbose: true))
 
         @player.addVerb "take", (sentence)=>
             if sentence.has(item: 1)
