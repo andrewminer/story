@@ -1,0 +1,42 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    align-items: center;
+    display: flex;
+    font-size: 16px;
+    font-family: monospace;
+    flex-direction: column;
+    justify-content: center;
+}
+
+div.log {
+    background: black;
+    color: green;
+    height: 600px;
+    overflow-y: scroll;
+    padding: 0.25em 1em;
+    width: 800px;
+}
+
+input.entry {
+    background: black;
+    border: none;
+    border-top: 1px solid gray;
+    color: green;
+    font-family: monospace;
+    font-size: 16px;
+    margin: 0;
+    outline: none;
+    padding: 0.5em 1em;
+    width: 800px;
+}
+
+p.log-text {
+}
+
+p.placeholder {
+    color: gray;
+}
+
