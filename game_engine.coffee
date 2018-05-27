@@ -26,14 +26,18 @@ class Inventory
             @items[item.name] = item
             @length += 1
 
-    describe: ->
+    describe: (options={})->
+        options.simple ?= false
         result = []
 
         needsDelimiter = false
         for name, item of @items
             if needsDelimiter
                 result.push("\n")
-            result.push("There is a #{item.name} here.")
+            if options.simple
+                result.push(item.name)
+            else
+                result.push("There is a #{item.name} here.")
             needsDelimiter = true
 
         return result.join("\n")
@@ -176,7 +180,6 @@ class Parser
         candidates = {}
 
         considerItem = (item)->
-            console.log("considering: #{item}")
             if item.name.indexOf(rawWord) isnt -1
                 candidate = candidates[item.name] ?= {item: item; count: 0}
                 candidate.count += 1
@@ -392,6 +395,7 @@ class Story
             "e": "east",
             "everything": "all",
             "g": "go"
+            "i": "inventory"
             "n": "north",
             "ne": "northeast",
             "nw": "northwest",
@@ -402,18 +406,24 @@ class Story
             "w": "west",
         })
 
-        player = @player
-        @player.addVerb "go", (sentence)->
+        @player.addVerb "go", (sentence)=>
             if sentence.has(location: 1)
-                player.move(sentence.location)
+                @player.move(sentence.location)
             else
                 throw new ParseError("I'm not sure where you want to go...")
 
-        @player.addVerb "take", (sentence)->
+        @player.addVerb "inventory", =>
+            if @player.inventory.length is 0
+                @log.writeln("You're not carrying anything.")
+            else
+                @log.writeln("You have:")
+                @log.writeln(@player.inventory.describe(simple: true))
+
+        @player.addVerb "take", (sentence)=>
             if sentence.has(item: 1)
-                player.take(sentence.item)
+                @player.take(sentence.item)
             else if sentence.has(item: 0)
-                player.take()
+                @player.take()
 
 
 ########################################################################################################################
