@@ -33,5 +33,5 @@ $(document).ready ->
     STORY.onChange(STORY)
 
     # start the story
-    STORY.begin()
+    STORY.restart()
     $input.focus()

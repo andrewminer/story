@@ -4,6 +4,10 @@ class GameLog
         @content = ""
         @onChange = onChange
 
+    clear: ->
+        @content = ""
+        @onChange(this)
+
     echoInput: (text)->
         @content += "<br>&gt; " + text + "<br>"
         @onChange(this)
@@ -21,22 +25,33 @@ class GameLog
 class Inventory
 
     constructor: ->
-        @items = {}
-        @length = 0
+        @clear()
+
+    # Properties ###################################################################################
+
+    Object.defineProperties @prototype,
+        length:
+            get: -> return @_length
+
+    # Public Methods ###############################################################################
 
     add: (item)->
-        if not @items[item.name]
-            @items[item.name] = item
-            @length += 1
+        if not @_items[item.name]
+            @_items[item.name] = item
+            @_length += 1
 
     all: ->
-        return (item for name, item of @items)
+        return (item for name, item of @_items)
+
+    clear: ->
+        @_items = {}
+        @_length = 0
 
     describe: (options={})->
         options.simple ?= false
         result = []
 
-        for name, item of @items
+        for name, item of @_items
             if options.simple
                 result.push(item.name)
             else
@@ -45,16 +60,16 @@ class Inventory
         return result.join("\n")
 
     eachItem: (withItem=(->))->
-        for name, item of @items
+        for name, item of @_items
             withItem(item)
 
     has: (item)->
-        return !! @items[item.name]
+        return !! @_items[item.name]
 
     remove: (itemToRemove)->
-        if @items[itemToRemove.name]
-            delete @items[itemToRemove.name]
-            @length -= 1
+        if @_items[itemToRemove.name]
+            delete @_items[itemToRemove.name]
+            @_length -= 1
 
 
 ########################################################################################################################
@@ -96,6 +111,8 @@ class Location
         @transitions = []
         @visited = false
 
+    # Public Methods ###############################################################################
+
     addTransition: (direction, toLocation, locked=false)->
         @transitions[direction] = new Transition(direction, toLocation, locked)
 
@@ -111,6 +128,7 @@ class Location
             result.push("\n")
             result.push(@description)
 
+        console.log("@inventory.length: #{@inventory.length}")
         if @inventory.length > 0
             result.push("")
             result.push(@inventory.describe())
@@ -142,10 +160,7 @@ class ParseError extends Error
 class Parser
 
     constructor: (@story)->
-        @aliases = {}
-        @directions = []
-        @verbs = {}
-        @fillerWords = new Set()
+        @restart()
 
     addAliases: (aliasMap)->
         for alias, meaning of aliasMap
@@ -177,6 +192,12 @@ class Parser
         @_normalizeSentence(sentence)
         @_validateSentence(sentence)
         return sentence
+
+    restart: ->
+        @aliases = {}
+        @directions = []
+        @fillerWords = new Set()
+        @verbs = {}
 
     # Private Methods ##############################################################################
 
@@ -278,9 +299,7 @@ class Player
     constructor: (@story)->
         @inventory = new Inventory()
         @onChange = (->)
-        @verbs = {}
-
-        @_score = 0
+        @restart()
 
     # Properties ###################################################################################
 
@@ -326,6 +345,12 @@ class Player
 
         @story.arrive(location)
 
+    restart: ->
+        @verbs = {}
+        @inventory.clear()
+        @score = 0
+        @_configureDefaultVerbs()
+
     take: (item)->
         localItems = @story.currentLocation.inventory
         if not item
@@ -338,12 +363,50 @@ class Player
 
             if not foundTakeableItem then @story.log.writeln("There's nothing here you can take.")
         else if localItems.has(item)
-            console.log(item)
             if item.take()
                 localItems.remove(item)
                 @inventory.add(item)
         else
             throw new ParseError("There isn't a #{item} here.")
+
+    # Private Methods ##############################################################################
+
+    _configureDefaultVerbs: ->
+        @addVerb "drop", (sentence)=>
+            if sentence.has(item: 0)
+                @drop()
+            else
+                for itemToken in sentence.tokens.item
+                    @drop(itemToken.referant)
+
+        @addVerb "go", (sentence)=>
+            if sentence.has(location: 1)
+                @move(sentence.location)
+            else
+                throw new ParseError("I'm not sure where you want to go...")
+
+        @addVerb "inventory", =>
+            if @inventory.length is 0
+                @story.log.writeln("You're not carrying anything.")
+            else
+                @story.log.writeln("You have:")
+                @story.log.writeln(@inventory.describe(simple: true))
+
+        @addVerb "look", (sentence)=>
+            if sentence.has(item: 1)
+                @story.log.writeln(sentence.item.describe(verbose: true))
+            else
+                @story.log.writeln(@story.currentLocation.describe(verbose: true))
+
+        @addVerb "restart", =>
+            @story.restart()
+
+        @addVerb "take", (sentence)=>
+            if sentence.has(item: 0)
+                @take()
+            else
+                for item in sentence.items
+                    @take(item)
 
 
 ########################################################################################################################
@@ -377,6 +440,8 @@ class Sentence
     Object.defineProperties @prototype,
         "item":
             get: -> return @tokens.item[0].referant
+        "items":
+            get: -> (i.referant for i in @tokens.item)
         "location":
             get: -> return @tokens.location[0].referant
         "verb":
@@ -387,18 +452,12 @@ class Sentence
 
 class Story
 
-    constructor: (@title)->
-        @currentLocation = null
-        @items = []
-        @locations = []
+    constructor: (@title, @onRestart=(->))->
         @log = new GameLog()
-        @onChange = (->)
         @parser = new Parser(this)
         @player = new Player(this)
 
-        @_turns = 0
-
-        @_configure()
+        @onChange = (->)
 
     # Properties ###################################################################################
 
@@ -434,11 +493,6 @@ class Story
 
         location.visited = true
 
-    begin: ->
-        @log.writeln(@title)
-        @log.writeln()
-        @arrive(@currentLocation)
-
     interpret: (userInput)->
         try
             @log.echoInput(userInput)
@@ -453,67 +507,31 @@ class Story
 
     # Private Methods ##############################################################################
 
-    _configure: ->
+    restart: ->
+        @currentLocation = null
+        @items = []
+        @locations = []
+        @turns = 0
+
+        @log.clear()
+        @parser.restart()
+        @player.restart()
+
         @parser.addDirections(
             "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"
         )
         @parser.addFillerWords(
-            "a",
-            "an",
-            "around",
-            "at",
-            "of",
-            "the",
-            "to"
+            "a", "all", "an", "around", "at", "everything", "of", "the", "to"
         )
         @parser.addAliases({
-            "d": "down",
-            "e": "east",
-            "everything": "all",
-            "g": "go"
-            "i": "inventory"
-            "l": "look",
-            "n": "north",
-            "ne": "northeast",
-            "nw": "northwest",
-            "s": "south",
-            "se": "southeast",
-            "sw": "southwest",
-            "u": "up",
-            "w": "west",
+            "d": "down", "e": "east", "g": "go", "i": "inventory", "l": "look", "n": "north", "ne": "northeast",
+            "nw": "northwest", "s": "south", "se": "southeast", "sw": "southwest", "u": "up", "w": "west",
         })
 
-        @player.addVerb "drop", (sentence)=>
-            if sentence.has(item: 0)
-                @player.drop()
-            else
-                for itemToken in sentence.tokens.item
-                    @player.drop(itemToken.referant)
-
-        @player.addVerb "go", (sentence)=>
-            if sentence.has(location: 1)
-                @player.move(sentence.location)
-            else
-                throw new ParseError("I'm not sure where you want to go...")
-
-        @player.addVerb "inventory", =>
-            if @player.inventory.length is 0
-                @log.writeln("You're not carrying anything.")
-            else
-                @log.writeln("You have:")
-                @log.writeln(@player.inventory.describe(simple: true))
-
-        @player.addVerb "look", (sentence)=>
-            if sentence.has(item: 1)
-                @log.writeln(sentence.item.describe(verbose: true))
-            else
-                @log.writeln(@currentLocation.describe(verbose: true))
-
-        @player.addVerb "take", (sentence)=>
-            if sentence.has(item: 1)
-                @player.take(sentence.item)
-            else if sentence.has(item: 0)
-                @player.take()
+        @onRestart()
+        @log.writeln(@title)
+        @log.writeln()
+        @arrive(@currentLocation)
 
 
 ########################################################################################################################
