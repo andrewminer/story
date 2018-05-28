@@ -26,6 +26,9 @@ class Inventory
             @items[item.name] = item
             @length += 1
 
+    all: ->
+        return (item for name, item of @items)
+
     describe: (options={})->
         options.simple ?= false
         result = []
@@ -55,8 +58,16 @@ class Inventory
 
 class Item
 
-    constructor: (@name)->
+    constructor: (@name, options={})->
+        options.fixed ?= false
+
         @description = "non-descript item"
+        @fixed = options.fixed
+
+    # Public Methods ###############################################################################
+
+    attemptTake: ->
+        return true
 
     describe: ->
         return @description
@@ -103,7 +114,6 @@ class Location
                 return transition
 
         return undefined
-
 
     removeItem: (item)->
         @items.remove(item)
@@ -258,11 +268,38 @@ class Player
 
     constructor: (@story)->
         @inventory = new Inventory()
+        @onChange = (->)
         @verbs = {}
+
+        @_score = 0
+
+    # Properties ###################################################################################
+
+    Object.defineProperties @prototype,
+        score:
+            get: ->
+                return @_score
+            set: (value)->
+                @_score = value
+                @onChange(this)
+
+    # Public Methods ###############################################################################
 
     addVerb: (verb, onVerb)->
         @verbs[verb] = onVerb
         @story.parser.addVerb(verb)
+
+    drop: (items...)->
+        if items.length is 0
+            items = @inventory.all()
+
+        for item in items
+            if @inventory.has(item)
+                @inventory.remove(item)
+                @story.currentLocation.inventory.add(item)
+                @story.log.writeln("Dropped #{item.name}.")
+            else
+                @story.log.writeln("You're not holding a #{item.name}.")
 
     enact: (sentence)->
         onVerb = @verbs[sentence.verb]
@@ -283,14 +320,23 @@ class Player
     take: (item)->
         localItems = @story.currentLocation.inventory
         if not item
-            localItems.eachItem (item)=> @take(item)
+            tookSomething = false
+            localItems.eachItem (item)=>
+                if not item.fixed
+                    @take(item)
+                    tookSomething = true
+
+            if not tookSomething then @story.log.writeln("There's nothing here you can take.")
         else if localItems.has(item)
-            localItems.remove(item)
-            @inventory.add(item)
-            @story.log.writeln("Taken.")
+            console.log(item)
+            if not item.fixed
+                localItems.remove(item)
+                @inventory.add(item)
+                @story.log.writeln("Took the #{item.name}.")
+            else
+                @story.log.writeln("You can't take the #{item.name}.")
         else
             throw new ParseError("You can't take #{item} because there isn't one here.")
-
 
 
 ########################################################################################################################
@@ -339,15 +385,28 @@ class Story
         @items = []
         @locations = []
         @log = new GameLog()
+        @onChange = (->)
         @parser = new Parser(this)
         @player = new Player(this)
 
+        @_turns = 0
+
         @_configure()
+
+    # Properties ###################################################################################
+
+    Object.defineProperties @prototype,
+        "turns":
+            get: ->
+                return @_turns
+            set: (value)->
+                @_turns = value
+                @onChange(this)
 
     # Configuration Methods ###########3############################################################
 
-    addItem: (name)->
-        item = new Item(name)
+    addItem: (name, options={})->
+        item = new Item(name, options)
         @items.push(item)
         return item
 
@@ -375,6 +434,7 @@ class Story
     interpret: (userInput)->
         try
             @log.echoInput(userInput)
+            @turns += 1
             sentence = @parser.interpret(userInput)
             @player.enact(sentence)
         catch e
@@ -414,6 +474,13 @@ class Story
             "u": "up",
             "w": "west",
         })
+
+        @player.addVerb "drop", (sentence)=>
+            if sentence.has(item: 0)
+                @player.drop()
+            else
+                for itemToken in sentence.tokens.item
+                    @player.drop(itemToken.referant)
 
         @player.addVerb "go", (sentence)=>
             if sentence.has(location: 1)

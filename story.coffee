@@ -2,7 +2,7 @@ window.STORY = s = new Story("A Walk Through My House")
 
 # Items ################################################################################################################
 
-boxOfTile = s.addItem("box of tiles")
+boxOfTile = s.addItem("box of tiles", fixed: true)
 boxOfTile.description =
     "This appears to be a box of flooring tiles. The tiles appear to be a very light color of natural stone. It is
     quite heavy."

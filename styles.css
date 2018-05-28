@@ -11,16 +11,7 @@ body {
     justify-content: center;
 }
 
-div.log {
-    background: black;
-    color: green;
-    height: 600px;
-    overflow-y: scroll;
-    padding: 0.25em 1em;
-    width: 800px;
-}
-
-input.entry {
+.entry {
     background: black;
     border: none;
     border-top: 1px solid gray;
@@ -33,10 +24,33 @@ input.entry {
     width: 800px;
 }
 
-p.log-text {
+.log {
+    background: black;
+    color: green;
+    height: 600px;
+    overflow-y: auto;
+    padding: 0.25em 1em;
+    width: 800px;
 }
 
-p.placeholder {
-    color: gray;
+.status {
+    background: black;
+    border: none;
+    border-bottom: 1px solid gray;
+    color: green;
+    display: flex;
+    font-family: monospace;
+    font-size: 16px;
+    margin: 0;
+    padding: 0.5em 1em;
+    width: 800px;
 }
 
+.score {
+    flex: 1 1 50%;
+    text-align: right;
+}
+
+.turns {
+    flex: 1 1 50%;
+}
