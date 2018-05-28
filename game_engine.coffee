@@ -8,9 +8,12 @@ class GameLog
         @content += "<br>&gt; " + text + "<br>"
         @onChange(this)
 
-    writeln: (text="")->
-        @content += text.replace(/\n/g, "<br>") + "<br>"
+    write: (text="")->
+        @content += text.replace(/\n/g, "<br>")
         @onChange(this)
+
+    writeln: (text="")->
+        @write(text + "\n")
 
 
 ########################################################################################################################
@@ -63,11 +66,17 @@ class Item
 
         @description = "non-descript item"
         @fixed = options.fixed
+        @story = null
 
     # Public Methods ###############################################################################
 
-    attemptTake: ->
-        return true
+    take: ->
+        if @fixed
+            @story.log.writeln("You cannot take the #{@name}.")
+            return false
+        else
+            @story.log.writeln("Taken.")
+            return true
 
     describe: ->
         return @description
@@ -320,23 +329,21 @@ class Player
     take: (item)->
         localItems = @story.currentLocation.inventory
         if not item
-            tookSomething = false
+            foundTakeableItem = false
             localItems.eachItem (item)=>
                 if not item.fixed
+                    @story.log.write("#{item}: ")
+                    foundTakeableItem = true
                     @take(item)
-                    tookSomething = true
 
-            if not tookSomething then @story.log.writeln("There's nothing here you can take.")
+            if not foundTakeableItem then @story.log.writeln("There's nothing here you can take.")
         else if localItems.has(item)
             console.log(item)
-            if not item.fixed
+            if item.take()
                 localItems.remove(item)
                 @inventory.add(item)
-                @story.log.writeln("Took the #{item.name}.")
-            else
-                @story.log.writeln("You can't take the #{item.name}.")
         else
-            throw new ParseError("You can't take #{item} because there isn't one here.")
+            throw new ParseError("There isn't a #{item} here.")
 
 
 ########################################################################################################################
@@ -407,6 +414,7 @@ class Story
 
     addItem: (name, options={})->
         item = new Item(name, options)
+        item.story = this
         @items.push(item)
         return item
 

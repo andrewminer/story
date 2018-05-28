@@ -2,10 +2,13 @@ window.STORY = s = new Story("A Walk Through My House")
 
 # Items ################################################################################################################
 
-boxOfTile = s.addItem("box of tiles", fixed: true)
+boxOfTile = s.addItem("box of tiles")
 boxOfTile.description =
     "This appears to be a box of flooring tiles. The tiles appear to be a very light color of natural stone. It is
     quite heavy."
+boxOfTile.take = ->
+    s.log.writeln("Oof! It's too heavy.")
+    return false
 
 hose = s.addItem("garden hose")
 hose.description = "It's a pretty ordinary garden hose about 20' long."
