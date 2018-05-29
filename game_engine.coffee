@@ -8,6 +8,18 @@ configureDefaults = (story)->
     story.addVerb "look", (sentence)-> story.look(sentence)
     story.addVerb "restart", -> story.reset()
 
+    parser = story.parser
+    parser.addDirections(
+        "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"
+    )
+    parser.addFillerWords(
+        "a", "all", "an", "around", "at", "everything", "of", "it", "the", "to", "thing"
+    )
+    parser.addAliases({
+        "d": "down", "e": "east", "g": "go", "i": "inventory", "l": "look", "n": "north", "ne": "northeast",
+        "nw": "northwest", "s": "south", "se": "southeast", "sw": "southwest", "u": "up", "w": "west",
+    })
+
 ########################################################################################################################
 
 class Actor
@@ -552,17 +564,6 @@ class Story extends Actor
         @log.clear()
         @parser.reset()
         @player.reset()
-
-        @parser.addDirections(
-            "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"
-        )
-        @parser.addFillerWords(
-            "a", "all", "an", "around", "at", "everything", "of", "the", "to"
-        )
-        @parser.addAliases({
-            "d": "down", "e": "east", "g": "go", "i": "inventory", "l": "look", "n": "north", "ne": "northeast",
-            "nw": "northwest", "s": "south", "se": "southeast", "sw": "southwest", "u": "up", "w": "west",
-        })
 
         configureDefaults(this)
         @onRestart()
