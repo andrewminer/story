@@ -327,7 +327,7 @@ class Parser
                     throw new ParseError("You can't go #{rawWord} from here.")
 
         for direction, transition of @story.currentLocation.transitions
-            if transition.toLocation.name.indexOf(rawWord) isnt -1
+            if transition.toLocation.name.toLowerCase().indexOf(rawWord) isnt -1
                 candidates.add(transition.toLocation)
 
         if @story.currentLocation.name.indexOf(rawWord) isnt -1
