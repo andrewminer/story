@@ -1,6 +1,6 @@
 window.STORY = new Story "A Walk Through My House", ->
 
-    # Items ################################################################################################################
+    # Items ############################################################################################################
 
     boxOfTile = @addItem "box of tiles"
     boxOfTile.description =
@@ -10,14 +10,17 @@ window.STORY = new Story "A Walk Through My House", ->
         @log.writeln "Oof! It's too heavy."
         return false
 
-    car = @addItem "your car"
-    car.description =
-        "Your car isn't anything special, but it gets you from place to place."
-
     hose = @addItem "garden hose"
     hose.description = "It's a pretty ordinary garden hose about 20' long."
 
-    # Locations ############################################################################################################
+    # Locations ########################################################################################################
+
+    car = @addLocation "Your Car"
+    car.description =
+        "Your car isn't anything special, but it does get you around."
+    car.addVerb "leave", "drive", "start", =>
+        @log.writeln("Having finished your visit, you drive back home again.")
+        @endGame()
 
     driveway = @addLocation "Driveway"
     driveway.description =
@@ -35,7 +38,7 @@ window.STORY = new Story "A Walk Through My House", ->
         can't make out any details."
     frontPorch.addItem boxOfTile
 
-    # Configure Map ########################################################################################################
+    # Configure Map ####################################################################################################
 
     driveway.addTransition "southwest", frontPorch
     frontPorch.addTransition "north", driveway

@@ -1,3 +1,43 @@
+configureDefaults = (story)->
+    player = story.player
+    player.addVerb "drop", (sentence)-> player.drop(sentence)
+    player.addVerb "go", (sentence)-> player.go(sentence)
+    player.addVerb "inventory", (sentence)-> player.listInventory(sentence)
+    player.addVerb "take", (sentence)-> player.take(sentence)
+
+    story.addVerb "look", (sentence)-> story.look(sentence)
+    story.addVerb "restart", -> story.reset()
+
+########################################################################################################################
+
+class Actor
+
+    constructor: (story)->
+        @_verbs = {}
+        @story = story or this
+
+    # Public Methods ###############################################################################
+
+    addVerb: (verbs..., action)->
+        for verb in verbs
+            @_verbs[verb] = action
+            @story.parser.addVerb(verb)
+
+    can: (verb)->
+        return !! @_verbs[verb]
+
+    do: (sentence)->
+        if @can(sentence.verb)
+            @_verbs[sentence.verb](sentence)
+            return true
+        return false
+
+    reset: ->
+        @_verbs = {}
+
+
+########################################################################################################################
+
 class GameLog
 
     constructor: (onChange=(->))->
@@ -30,6 +70,8 @@ class Inventory
     # Properties ###################################################################################
 
     Object.defineProperties @prototype,
+        items:
+            get: -> return (item for name, item of @_items)
         length:
             get: -> return @_length
 
@@ -74,14 +116,15 @@ class Inventory
 
 ########################################################################################################################
 
-class Item
+class Item extends Actor
 
-    constructor: (@name, options={})->
+    constructor: (story, name, options={})->
         options.fixed ?= false
+        super(story)
 
         @description = "non-descript item"
         @fixed = options.fixed
-        @story = null
+        @name = name
 
     # Public Methods ###############################################################################
 
@@ -102,12 +145,15 @@ class Item
 
 ########################################################################################################################
 
-class Location
+class Location extends Actor
 
-    constructor: (@name)->
+    constructor: (story, name)->
+        super(story)
+
         @description = "Non-descript Place"
         @destinations = {}
         @inventory = new Inventory()
+        @name = name
         @transitions = []
         @visited = false
 
@@ -118,7 +164,6 @@ class Location
 
     addItem: (item)->
         @inventory.add(item)
-        return this
 
     describe: (options={})->
         options.verbose ?= false
@@ -139,12 +184,14 @@ class Location
         for direction, transition of @transitions
             if transition.toLocation is location
                 return transition
-
         return undefined
 
     removeItem: (item)->
-        @items.remove(item)
-        return this
+        @inventory.remove(item)
+
+    reset: ->
+        super()
+        @inventory.clear()
 
     toString: ->
         return @name
@@ -159,8 +206,9 @@ class ParseError extends Error
 
 class Parser
 
-    constructor: (@story)->
-        @restart()
+    constructor: (story)->
+        @story = story
+        @reset()
 
     addAliases: (aliasMap)->
         for alias, meaning of aliasMap
@@ -193,7 +241,7 @@ class Parser
         @_validateSentence(sentence)
         return sentence
 
-    restart: ->
+    reset: ->
         @aliases = {}
         @directions = []
         @fillerWords = new Set()
@@ -266,9 +314,7 @@ class Parser
                     throw new ParseError("You can't go #{rawWord} from here.")
 
         for direction, transition of @story.currentLocation.transitions
-            if rawWord is direction
-                candidates.add(transition.toLocation)
-            else if transition.toLocation.name.indexOf(rawWord) isnt -1
+            if transition.toLocation.name.indexOf(rawWord) isnt -1
                 candidates.add(transition.toLocation)
 
         if @story.currentLocation.name.indexOf(rawWord) isnt -1
@@ -294,12 +340,13 @@ class Parser
 
 ########################################################################################################################
 
-class Player
+class Player extends Actor
 
-    constructor: (@story)->
+    constructor: (story)->
+        super(story)
+
         @inventory = new Inventory()
         @onChange = (->)
-        @restart()
 
     # Properties ###################################################################################
 
@@ -313,11 +360,8 @@ class Player
 
     # Public Methods ###############################################################################
 
-    addVerb: (verb, onVerb)->
-        @verbs[verb] = onVerb
-        @story.parser.addVerb(verb)
-
-    drop: (items...)->
+    drop: (sentence)->
+        items = sentence.items
         if items.length is 0
             items = @inventory.all()
 
@@ -329,84 +373,56 @@ class Player
             else
                 @story.log.writeln("You're not holding a #{item.name}.")
 
-    enact: (sentence)->
-        onVerb = @verbs[sentence.verb]
-        if onVerb
-            onVerb(sentence)
-        else
-            throw new ParseError("I'm not sure how to #{sentence.verb}, to be honest.")
+    go: (sentence)->
+        if not sentence.location
+            throw new ParseError("I'm not sure where you want to go...")
 
-    move: (location)->
+        location = sentence.location
         transition = @story.currentLocation.getTransitionTo(location)
         if not transition
             throw new ParseError("You can't get to #{location.name} from here.")
-        else if transition.locked
-            throw new ParseError(transition.lockDescription)
 
         @story.arrive(location)
 
-    restart: ->
-        @verbs = {}
+    listInventory: (sentence)->
+        if @inventory.length is 0
+            @story.log.writeln("You're not carrying anything.")
+        else
+            @story.log.writeln("You have:")
+            @story.log.writeln(@inventory.describe(simple: true))
+
+    take: (sentence)->
+        items = sentence.items
+        localItems = @story.currentLocation.inventory
+
+        if items.length is 0
+            foundTakeableItem = true
+            for item in localItems.items
+                if not item.fixed
+                    items.push(item)
+
+            if not foundTakeableItem
+                @story.log.writeln("There's nothing here you can take.")
+
+        _doTake = (item)=>
+            if localItems.has(item)
+                if item.take()
+                    localItems.remove(item)
+                    @inventory.add(item)
+            else
+                throw new ParseError("There isn't a #{item} here.")
+
+        if items.length > 1
+            for item in items
+                @story.log.write("#{item}: ")
+                _doTake(item)
+        else
+            _doTake(items[0])
+
+    reset: ->
+        super()
         @inventory.clear()
         @score = 0
-        @_configureDefaultVerbs()
-
-    take: (item)->
-        localItems = @story.currentLocation.inventory
-        if not item
-            foundTakeableItem = false
-            localItems.eachItem (item)=>
-                if not item.fixed
-                    @story.log.write("#{item}: ")
-                    foundTakeableItem = true
-                    @take(item)
-
-            if not foundTakeableItem then @story.log.writeln("There's nothing here you can take.")
-        else if localItems.has(item)
-            if item.take()
-                localItems.remove(item)
-                @inventory.add(item)
-        else
-            throw new ParseError("There isn't a #{item} here.")
-
-    # Private Methods ##############################################################################
-
-    _configureDefaultVerbs: ->
-        @addVerb "drop", (sentence)=>
-            if sentence.has(item: 0)
-                @drop()
-            else
-                for itemToken in sentence.tokens.item
-                    @drop(itemToken.referant)
-
-        @addVerb "go", (sentence)=>
-            if sentence.has(location: 1)
-                @move(sentence.location)
-            else
-                throw new ParseError("I'm not sure where you want to go...")
-
-        @addVerb "inventory", =>
-            if @inventory.length is 0
-                @story.log.writeln("You're not carrying anything.")
-            else
-                @story.log.writeln("You have:")
-                @story.log.writeln(@inventory.describe(simple: true))
-
-        @addVerb "look", (sentence)=>
-            if sentence.has(item: 1)
-                @story.log.writeln(sentence.item.describe(verbose: true))
-            else
-                @story.log.writeln(@story.currentLocation.describe(verbose: true))
-
-        @addVerb "restart", =>
-            @story.restart()
-
-        @addVerb "take", (sentence)=>
-            if sentence.has(item: 0)
-                @take()
-            else
-                for item in sentence.items
-                    @take(item)
 
 
 ########################################################################################################################
@@ -415,6 +431,20 @@ class Sentence
 
     constructor: ->
         @tokens = item: [], location: [], verb: []
+
+    # Properties ###################################################################################
+
+    Object.defineProperties @prototype,
+        "item":
+            get: -> return @tokens.item[0].referant
+        "items":
+            get: -> (i.referant for i in @tokens.item)
+        "location":
+            get: -> return @tokens.location[0].referant
+        "verb":
+            get: -> return @tokens.verb[0].rawText
+
+    # Public Methods ###############################################################################
 
     addWord: (wordToken)->
         @tokens[wordToken.type].push(wordToken)
@@ -437,27 +467,20 @@ class Sentence
             "}"
         )
 
-    Object.defineProperties @prototype,
-        "item":
-            get: -> return @tokens.item[0].referant
-        "items":
-            get: -> (i.referant for i in @tokens.item)
-        "location":
-            get: -> return @tokens.location[0].referant
-        "verb":
-            get: -> return @tokens.verb[0].rawText
-
 
 ########################################################################################################################
 
-class Story
+class Story extends Actor
 
-    constructor: (@title, @onRestart=(->))->
+    constructor: (title, onRestart=(->))->
+        super()
+
         @log = new GameLog()
+        @onChange = (->)
+        @onRestart = onRestart
         @parser = new Parser(this)
         @player = new Player(this)
-
-        @onChange = (->)
+        @title = title
 
     # Properties ###################################################################################
 
@@ -472,13 +495,13 @@ class Story
     # Configuration Methods ###########3############################################################
 
     addItem: (name, options={})->
-        item = new Item(name, options)
+        item = new Item(this, name, options)
         item.story = this
         @items.push(item)
         return item
 
     addLocation: (name)->
-        location = new Location(name)
+        location = new Location(this, name)
         @locations.push(location)
         if @initialLocation is null
             @initialLocation = location
@@ -498,24 +521,37 @@ class Story
             @log.echoInput(userInput)
             @turns += 1
             sentence = @parser.interpret(userInput)
-            @player.enact(sentence)
+
+            if @do(sentence) then return
+            if @player.do(sentence) then return
+            if @currentLocation.do(sentence) then return
+            for item in @currentLocation.inventory.items
+                if item.do(sentence) then return
+
+            throw new ParseError("To be honest, I'm not sure how to #{sentence.verb} anything around here.")
         catch e
             if e instanceof ParseError
                 @log.writeln(e.message)
             else
                 throw e
 
-    # Private Methods ##############################################################################
+    look: (sentence)->
+        if sentence.has(item: 1)
+            @story.log.writeln(sentence.item.describe(verbose: true))
+        else
+            @story.log.writeln(@story.currentLocation.describe(verbose: true))
 
-    restart: ->
+    reset: ->
+        super()
+
         @currentLocation = null
         @items = []
         @locations = []
         @turns = 0
 
         @log.clear()
-        @parser.restart()
-        @player.restart()
+        @parser.reset()
+        @player.reset()
 
         @parser.addDirections(
             "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"
@@ -528,7 +564,9 @@ class Story
             "nw": "northwest", "s": "south", "se": "southeast", "sw": "southwest", "u": "up", "w": "west",
         })
 
+        configureDefaults(this)
         @onRestart()
+
         @log.writeln(@title)
         @log.writeln()
         @arrive(@currentLocation)
@@ -538,7 +576,7 @@ class Story
 
 class Transition
 
-    constructor: (@direction, @toLocation, @locked=false)->
+    constructor: (@direction, @toLocation)->
         # do nothing
 
     toString: ->
