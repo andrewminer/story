@@ -18,16 +18,19 @@ window.STORY = new Story "A Walk Through My House", ->
     car = @addLocation "Your Car"
     car.description =
         "Your car isn't anything special, but it does get you around."
-    car.addVerb "leave", "drive", "start", =>
+    car.addVerb "drive", "start", =>
         @log.writeln("Having finished your visit, you drive back home again.")
         @endGame()
 
     driveway = @addLocation "Driveway"
     driveway.description =
-        "The driveway extends slightly uphill a short way to the west back to the street. At this part, it's recessed a
-        little below the level of the lawn with a stone wall defining the boundary. To the south are three garage doors
-        which make up the entire side of the house. Above the doors are a few windows. The back yard is to the east, and
-        the some steps lead up to the front porch to the southwest."
+        "The driveway is paved with concrete, and quite large: room enough for five or six cars. Your own car is the
+        only one here at the moment, though. The driveway extends slightly uphill a short way to the west back to the
+        street. At this part, it's recessed a little below the level of the lawn with a stone wall defining the
+        boundary.\n\nFrom where you're standing, it looks like most of the property has been left wild with tall,
+        scraggly pine trees swaying in a light breeze. Immediately surrounding the house is a short-cropped lawn. To the
+        south are three garage doors which make up the entire side of the house. Above the doors are a few windows. The
+        back yard is to the east, and the some steps lead up to the front porch to the southwest."
     driveway.addItem hose
 
     frontPorch = @addLocation "Front Porch"
@@ -40,6 +43,7 @@ window.STORY = new Story "A Walk Through My House", ->
 
     # Configure Map ####################################################################################################
 
+    driveway.addTransition "in", car
     driveway.addTransition "southwest", frontPorch
     frontPorch.addTransition "north", driveway
 

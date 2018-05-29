@@ -10,14 +10,15 @@ configureDefaults = (story)->
 
     parser = story.parser
     parser.addDirections(
-        "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down"
+        "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down", "in", "out"
     )
     parser.addFillerWords(
         "a", "all", "an", "around", "at", "everything", "of", "it", "the", "to", "thing"
     )
     parser.addAliases({
-        "d": "down", "e": "east", "g": "go", "i": "inventory", "l": "look", "n": "north", "ne": "northeast",
-        "nw": "northwest", "s": "south", "se": "southeast", "sw": "southwest", "u": "up", "w": "west",
+        "d": "down", "e": "east", "g": "go", "get": "take", "i": "inventory", "into": "in", "l": "look",
+        "leave": "exit", "n": "north", "ne": "northeast", "nw": "northwest", "s": "south", "se": "southeast",
+        "sw": "southwest", "u": "up", "w": "west"
     })
 
 ########################################################################################################################
@@ -185,7 +186,6 @@ class Location extends Actor
             result.push("\n")
             result.push(@description)
 
-        console.log("@inventory.length: #{@inventory.length}")
         if @inventory.length > 0
             result.push("")
             result.push(@inventory.describe())
@@ -238,6 +238,7 @@ class Parser
         @verbs[verb] = verb
 
     interpret: (userInput)->
+        userInput = userInput.toLowerCase()
         sentence = new Sentence
         for rawWord in userInput.split(/\s\s*/)
             rawWord = @_resolveAliases(rawWord)
@@ -492,6 +493,7 @@ class Story extends Actor
         @onRestart = onRestart
         @parser = new Parser(this)
         @player = new Player(this)
+        @possibleScore = undefined
         @title = title
 
     # Properties ###################################################################################
@@ -527,6 +529,9 @@ class Story extends Actor
         @log.writeln()
 
         location.visited = true
+
+    endGame: ->
+        @log.writeln("\n\nThanks for playing! Say: \"restart\" to play again!\n\n\n")
 
     interpret: (userInput)->
         try
