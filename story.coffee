@@ -4,7 +4,7 @@ window.STORY = new Story "A Walk Through My House", ->
 
     boxOfTile = @addItem "box of tiles"
     boxOfTile.description =
-        "This appears to be a box of flooring tile@ The tiles appear to be a very light color of natural stone. It is
+        "This appears to be a box of flooring tiles. The tiles appear to be a very light color of natural stone. It is
         quite heavy."
     boxOfTile.take = =>
         @log.writeln "Oof! It's too heavy."
