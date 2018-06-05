@@ -10,6 +10,14 @@ window.STORY = new Story "A Walk Through My House", ->
         @log.writeln "Oof! It's too heavy."
         return false
 
+    carKeys = @addItem "your car keys"
+    carKeys.description =
+        "Your keychain has your car key, your house key, and a few beat-up kick-knacks which are scarcely even
+        recognizable anymore."
+    carKeys.addVerb "use", "insert", =>
+        if @currentLocation is car
+            @interpret "drive", silent:true
+
     hose = @addItem "garden hose"
     hose.description = "It's a pretty ordinary garden hose about 20' long."
 
@@ -17,10 +25,14 @@ window.STORY = new Story "A Walk Through My House", ->
 
     car = @addLocation "Your Car"
     car.description =
-        "Your car isn't anything special, but it does get you around."
+        "Your car isn't anything special, but it does get you around. If you're ready to end your visit, just drive
+        away. If you'd like to continue playing, hop out of the car."
     car.addVerb "drive", "start", =>
-        @log.writeln("Having finished your visit, you drive back home again.")
-        @endGame()
+        if @player.inventory.has(carKeys)
+            @log.writeln("Having finished your visit, you drive back home again.")
+            @endGame()
+        else
+            @log.writeln("You seem to have left your keys somewhere...")
 
     driveway = @addLocation "Driveway"
     driveway.description =
@@ -43,6 +55,7 @@ window.STORY = new Story "A Walk Through My House", ->
 
     # Configure Map ####################################################################################################
 
+    car.addTransition "out", driveway
     driveway.addTransition "in", car
     driveway.addTransition "southwest", frontPorch
     frontPorch.addTransition "north", driveway

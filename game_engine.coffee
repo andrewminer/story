@@ -13,13 +13,25 @@ configureDefaults = (story)->
         "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest", "up", "down", "in", "out"
     )
     parser.addFillerWords(
-        "a", "all", "an", "around", "at", "everything", "of", "it", "the", "to", "thing"
+        "a", "all", "an", "around", "at", "everything", "my", "of", "it", "the", "to", "thing"
     )
     parser.addAliases({
-        "d": "down", "e": "east", "g": "go", "get": "take", "i": "inventory", "into": "in", "l": "look",
-        "leave": "exit", "n": "north", "ne": "northeast", "nw": "northwest", "s": "south", "se": "southeast",
-        "sw": "southwest", "u": "up", "w": "west"
+        "d": "down",
+        "e": "east",
+        "g": "go",
+        "i": "inventory",
+        "into": "in",
+        "l": "look",
+        "n": "north",
+        "ne": "northeast",
+        "nw": "northwest",
+        "s": "south",
+        "se": "southeast",
+        "sw": "southwest",
+        "u": "up",
+        "w": "west"
     })
+    parser.addVerb("get")
 
 ########################################################################################################################
 
@@ -250,7 +262,7 @@ class Parser
 
             throw new ParseError("I'm not sure what you meant by #{rawWord}... can you re-phrase that?")
 
-        @_normalizeSentence(sentence)
+        sentence = @_normalizeSentence(sentence)
         @_validateSentence(sentence)
         return sentence
 
@@ -265,6 +277,13 @@ class Parser
     _normalizeSentence: (sentence)->
         if sentence.has(verb: 0, location: 1)
             sentence.addWord(new WordToken("go", "verb"))
+        else if sentence.has(verb: 0, item: 1)
+            sentence.addWord(new WordToken("take", "verb"))
+        else if sentence.verb is "get"
+            if sentence.has(location: 1)
+                sentence = new Sentence(new WordToken("go", "verb"), sentence.tokens.location[0])
+            if sentence.has(item: 1)
+                sentence = new Sentence(new WordToken("take", "verb"), sentence.tokens.item[0])
 
         return sentence
 
@@ -442,8 +461,11 @@ class Player extends Actor
 
 class Sentence
 
-    constructor: ->
+    constructor: (tokens...)->
         @tokens = item: [], location: [], verb: []
+
+        for token in tokens
+            @addWord(token)
 
     # Properties ###################################################################################
 
@@ -460,7 +482,11 @@ class Sentence
     # Public Methods ###############################################################################
 
     addWord: (wordToken)->
-        @tokens[wordToken.type].push(wordToken)
+        tokenList = @tokens[wordToken.type]
+        for existingToken in tokenList
+            if existingToken.referant and existingToken.referant is wordToken.referant
+                return
+        tokenList.push(wordToken)
 
     has: (patternMap)->
         patternMap ?= {}
@@ -531,17 +557,22 @@ class Story extends Actor
         location.visited = true
 
     endGame: ->
+        @currentLocation = null
         @log.writeln("\n\nThanks for playing! Say: \"restart\" to play again!\n\n\n")
 
-    interpret: (userInput)->
+    interpret: (userInput, options={})->
+        options.silent ?= false
+
         try
-            @log.echoInput(userInput)
-            @turns += 1
+            if not options.silent
+                @log.echoInput(userInput)
+                @turns += 1
+
             sentence = @parser.interpret(userInput)
 
             if @do(sentence) then return
             if @player.do(sentence) then return
-            if @currentLocation.do(sentence) then return
+            if @currentLocation and @currentLocation.do(sentence) then return
             for item in @currentLocation.inventory.items
                 if item.do(sentence) then return
 
